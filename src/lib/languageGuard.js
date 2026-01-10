@@ -30,8 +30,9 @@ export function sanitizeLanguage(text) {
         { regex: /\bmust\b/gi, replacement: 'may need to' },
         { regex: /\bdefinitely\b/gi, replacement: 'likely' },
         { regex: /\bwill be taken\b/gi, replacement: 'may be initiated' },
-        { regex: /\bguaranteed\b/gi, replacement: 'possible' },
+        { regex: /\bguaranteed\b/gi, replacement: 'generally' },
         { regex: /\bit is advisable to disregard\b/gi, replacement: 'many people choose to ignore' },
+        { regex: /\byou should ignore\b/gi, replacement: 'you may consider ignoring' },
         { regex: /\blegitimate notices always\b/gi, replacement: 'legitimate notices usually' },
         { regex: /\bmandatory\b/gi, replacement: 'required' } // 'required' is neutral, 'mandatory' feels aggressive
     ];

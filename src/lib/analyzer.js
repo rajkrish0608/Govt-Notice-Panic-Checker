@@ -1,4 +1,5 @@
-import { sanitizeLanguage } from './languageGuard';
+import { sanitizeLanguage } from './languageGuard.js';
+import { KEYWORDS, CONFIDENCE_LEVELS } from './constants.js';
 
 /**
  * Analyzes the input text by calling the secure Backend API.
@@ -26,9 +27,26 @@ export async function analyzeNotice(text) {
         let data = await response.json();
 
         // 1. SCAM OVERRIDE RULE (Safety)
-        // If scam patterns are detected, force Seriousness to Medium and tone down panic.
         if (detectScamIndicators(text) || data.type === 'SUSPICIOUS_MESSAGE' || data.type === 'SCAM') {
             data = applyScamOverride(data);
+        } else {
+            // 2. CONFIDENCE SCORE CONSISTENCY (Reliability)
+            // Re-calculate confidence based on client-side keyword matches to ensure strict logic
+            const calculatedConfidence = calculateClientConfidence(text);
+
+            // If notice is ambiguous (OTHER type), FORCE LOW Confidence regardless of AI opinion
+            if (data.type === 'OTHER' || data.type === 'UNKNOWN') {
+                data.confidence = CONFIDENCE_LEVELS.LOW;
+            } else {
+                // Trust the stricter of the two (Client Rule vs AI)
+                // If Client says HIGH (lots of matches), we trust it.
+                // If Client says LOW (<2 matches), we force LOW to be safe against hallucination.
+                if (calculatedConfidence === CONFIDENCE_LEVELS.LOW) {
+                    data.confidence = CONFIDENCE_LEVELS.LOW;
+                } else if (calculatedConfidence === CONFIDENCE_LEVELS.HIGH) {
+                    data.confidence = CONFIDENCE_LEVELS.HIGH;
+                }
+            }
         }
 
         // 2. STRICT FORMAT ENFORCEMENT & ABSOLUTE REMOVAL
@@ -117,4 +135,26 @@ function createErrorResult(msg) {
         deadlines: "",
         redFlags: null
     };
+}
+
+/**
+ * strict confidence logic:
+ * HIGH -> >=6 keyword matches
+ * MEDIUM -> 3-5 matches
+ * LOW -> <=2 matches
+ */
+function calculateClientConfidence(text) {
+    const cleanText = text.toLowerCase();
+    let totalMatches = 0;
+
+    // Count matches across all categories
+    Object.values(KEYWORDS).forEach(keywordList => {
+        keywordList.forEach(k => {
+            if (cleanText.includes(k)) totalMatches++;
+        });
+    });
+
+    if (totalMatches >= 6) return CONFIDENCE_LEVELS.HIGH;
+    if (totalMatches >= 3) return CONFIDENCE_LEVELS.MEDIUM;
+    return CONFIDENCE_LEVELS.LOW;
 }
