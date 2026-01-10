@@ -1,12 +1,16 @@
 /**
  * Replaces aggressive or panic-inducing words with calm, objective terminology.
+ * Also softens absolute legal statements to ensure probabilistic language.
  * @param {string} text - The raw output text to sanitize.
- * @returns {string} - The calm version of the text.
+ * @returns {string} - The calm, compliant version of the text.
  */
 export function sanitizeLanguage(text) {
     if (!text) return "";
 
-    const replacements = [
+    let calmText = text;
+
+    // 1. Panic Reduction (Emotional Safety)
+    const panicReplacements = [
         { regex: /arrest/gi, replacement: 'legal proceedings' },
         { regex: /jail/gi, replacement: 'strict legal outcomes' },
         { regex: /severe punishment/gi, replacement: 'potential regulatory action' },
@@ -19,8 +23,20 @@ export function sanitizeLanguage(text) {
         { regex: /criminal/gi, replacement: 'legal' }
     ];
 
-    let calmText = text;
-    replacements.forEach(({ regex, replacement }) => {
+    // 2. Legal Absolute Softening (Liability Safety)
+    // "always" -> "typically", "must" -> "may need to"
+    const absoluteReplacements = [
+        { regex: /\balways\b/gi, replacement: 'typically' },
+        { regex: /\bmust\b/gi, replacement: 'may need to' },
+        { regex: /\bdefinitely\b/gi, replacement: 'likely' },
+        { regex: /\bwill be taken\b/gi, replacement: 'may be initiated' },
+        { regex: /\bguaranteed\b/gi, replacement: 'possible' },
+        { regex: /\bit is advisable to disregard\b/gi, replacement: 'many people choose to ignore' },
+        { regex: /\blegitimate notices always\b/gi, replacement: 'legitimate notices usually' },
+        { regex: /\bmandatory\b/gi, replacement: 'required' } // 'required' is neutral, 'mandatory' feels aggressive
+    ];
+
+    [...panicReplacements, ...absoluteReplacements].forEach(({ regex, replacement }) => {
         calmText = calmText.replace(regex, replacement);
     });
 
