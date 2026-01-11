@@ -1,56 +1,81 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import { z } from 'zod';
 import bodyParser from 'body-parser';
 import dotenv from 'dotenv';
 import { llmService } from './services/llm.js';
+import logger from './utils/logger.js';
+import errorHandler from './middleware/errorHandler.js';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
-app.use(cors());
+// Security Middleware
+app.use(helmet());
+
+// Rate Limiting
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per windowMs
+    message: { error: "Too many requests, please try again later." }
+});
+app.use('/api/', limiter);
+
+// CORS with strictly defined origin
+app.use(cors({
+    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type']
+}));
+
 app.use(bodyParser.json());
 
-// Header Security (Basic)
-app.use((req, res, next) => {
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'DENY');
-    next();
+// Input Validation Schema
+const analyzeSchema = z.object({
+    text: z.string().min(10, "Text must be at least 10 characters long").max(5000, "Text is too long")
 });
 
 // Routes
-app.post('/api/analyze', async (req, res) => {
+app.post('/api/analyze', async (req, res, next) => {
     try {
-        const { text } = req.body;
+        const validation = analyzeSchema.safeParse(req.body);
 
-        if (!text || text.length < 5) {
-            return res.status(400).json({ error: "Text is too short or missing." });
+        if (!validation.success) {
+            logger.warn(`Validation Error: ${validation.error.errors[0].message}`);
+            return res.status(400).json({ error: validation.error.errors[0].message });
         }
 
+        const { text } = validation.data;
+        logger.info('Analyzing text...');
+
         // Call the AI Service
-        // In Phase 1, this hits the Mock. In Phase 2, it hits Gemini/DeepSeek.
         const analysis = await llmService.analyzeText(text);
 
         return res.json(analysis);
 
     } catch (error) {
-        console.error("API Error:", error);
-        return res.status(500).json({
-            error: "Internal Server Error",
-            details: "The AI service is temporarily unavailable. Please try again."
-        });
+        next(error); // Pass to error handler
     }
 });
 
 // Health Check
 app.get('/health', (req, res) => {
-    res.json({ status: 'OK', mode: process.env.LLM_API_KEY ? 'LIVE_AI' : 'MOCK_AI' });
+    res.json({
+        status: 'OK',
+        mode: process.env.LLM_API_KEY ? 'LIVE_AI' : 'MOCK_AI',
+        uptime: process.uptime()
+    });
 });
+
+// Global Error Handler
+app.use(errorHandler);
 
 // Start Server
 app.listen(PORT, () => {
-    console.log(`✅ Backend Server running on http://localhost:${PORT}`);
-    console.log(`   - API Endpoint: http://localhost:${PORT}/api/analyze`);
+    logger.info(`✅ Backend Server running on http://localhost:${PORT}`);
+    logger.info(`   - API Endpoint: http://localhost:${PORT}/api/analyze`);
 });

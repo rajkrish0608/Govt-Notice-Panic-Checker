@@ -1,5 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { SYSTEM_PROMPT } from '../prompts.js';
+import logger from '../utils/logger.js';
+import { guardrails } from './guardrails.js';
 
 /**
  * Service to handle LLM interactions.
@@ -7,7 +9,7 @@ import { SYSTEM_PROMPT } from '../prompts.js';
  */
 export const llmService = {
     analyzeText: async (text) => {
-        console.log("🤖 LLM Service received text for analysis...");
+        logger.info("🤖 LLM Service received text for analysis...");
 
         if (!process.env.LLM_API_KEY) {
             throw new Error("LLM_API_KEY is missing in environment variables");
@@ -29,10 +31,15 @@ export const llmService = {
             // Clean up markdown formatting if present (e.g. ```json ... ```)
             textResponse = textResponse.replace(/```json/g, "").replace(/```/g, "").trim();
 
-            return JSON.parse(textResponse);
+            const parsedResult = JSON.parse(textResponse);
+
+            // Apply Safety Guardrails
+            const safeResult = guardrails.validateAndSanitize(parsedResult);
+
+            return safeResult;
 
         } catch (error) {
-            console.error("Gemini API Error:", error);
+            logger.error(`Gemini API Error: ${error.message}`);
             // Fallback to error object structure if AI fails
             return {
                 type: "ERROR",

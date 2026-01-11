@@ -1,5 +1,8 @@
 import React from 'react';
 import { ShieldCheck } from 'lucide-react';
+import Footer from './Footer';
+import CookieConsent from './CookieConsent';
+import PrivacyBadge from './PrivacyBadge';
 
 const Layout = ({ children }) => {
     return (
@@ -20,12 +23,11 @@ const Layout = ({ children }) => {
 
             <main className="flex-grow container mx-auto px-4 pb-12">
                 {children}
+                <PrivacyBadge />
             </main>
 
-            <footer className="py-8 text-center text-slate-600 text-sm border-t border-slate-800/50 mt-auto">
-                <p>© 2026 Gov Notice Decoder. Built for public awareness.</p>
-                <p className="text-xs mt-1 opacity-60">Not affiliated with any government body.</p>
-            </footer>
+            <Footer />
+            <CookieConsent />
         </div>
     );
 };
