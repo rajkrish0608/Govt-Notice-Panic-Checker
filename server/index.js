@@ -8,6 +8,7 @@ import dotenv from 'dotenv';
 import { llmService } from './services/llm.js';
 import logger from './utils/logger.js';
 import errorHandler from './middleware/errorHandler.js';
+import path from 'path';
 
 dotenv.config();
 
@@ -75,6 +76,17 @@ app.get('/health', (req, res) => {
 
 // Global Error Handler
 app.use(errorHandler);
+
+// Serve Static Files (Production)
+if (process.env.NODE_ENV === 'production') {
+    const __dirname = path.resolve();
+    app.use(express.static(path.join(__dirname, 'dist')));
+
+    // SPA Catch-all (Regex to avoid path-to-regexp errors)
+    app.get(/.*/, (req, res) => {
+        res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
+    });
+}
 
 // Start Server
 app.listen(PORT, () => {
