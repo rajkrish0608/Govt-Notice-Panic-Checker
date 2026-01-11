@@ -45,8 +45,10 @@ app.post('/api/analyze', async (req, res, next) => {
         const validation = analyzeSchema.safeParse(req.body);
 
         if (!validation.success) {
-            logger.warn(`Validation Error: ${validation.error.errors[0].message}`);
-            return res.status(400).json({ error: validation.error.errors[0].message });
+            const errorMessage = validation.error?.errors?.[0]?.message || "Invalid input data";
+
+            logger.warn(`Validation Error: ${errorMessage}`);
+            return res.status(400).json({ error: errorMessage });
         }
 
         const { text } = validation.data;
