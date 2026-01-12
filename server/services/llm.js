@@ -8,8 +8,8 @@ import { guardrails } from './guardrails.js';
  * Now using REAL Gemini 1.5 Flash API.
  */
 export const llmService = {
-    analyzeText: async (text) => {
-        logger.info("🤖 LLM Service received text for analysis...");
+    analyzeText: async (text, imageData = null) => {
+        logger.info("🤖 LLM Service received input for analysis...");
 
         // FAIL-SAFE FALLBACK RESPONSE
         const FALLBACK_RESPONSE = {
@@ -30,13 +30,26 @@ export const llmService = {
 
         try {
             const genAI = new GoogleGenerativeAI(process.env.LLM_API_KEY);
-            const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+            // Use gemini-1.5-flash for vision capabilities
+            // Use gemini-1.5-flash-latest for availability
+            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
 
-            const result = await model.generateContent({
-                contents: [
-                    { role: "user", parts: [{ text: SYSTEM_PROMPT + `\n\nAnalyze this notice text:\n"${text}"` }] }
-                ]
-            });
+            const textPart = SYSTEM_PROMPT + `\n\nAnalyze this notice text:\n"${text}"`;
+
+            let promptParts = [textPart];
+
+            if (imageData) {
+                logger.info("📎 Attaching image to analysis request");
+                // Gemini API expects 'inlineData' for base64 images
+                promptParts.push({
+                    inlineData: {
+                        data: imageData.base64,
+                        mimeType: imageData.mimeType
+                    }
+                });
+            }
+
+            const result = await model.generateContent(promptParts);
 
             const response = await result.response;
             let textResponse = response.text();

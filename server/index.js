@@ -1,9 +1,14 @@
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const pdf = require('pdf-parse');
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import bodyParser from 'body-parser';
+import multer from 'multer';
 import dotenv from 'dotenv';
 import { llmService } from './services/llm.js';
 import logger from './utils/logger.js';
@@ -37,31 +42,67 @@ app.use(bodyParser.json());
 
 // Input Validation Schema
 const analyzeSchema = z.object({
-    text: z.string().min(10, "Text must be at least 10 characters long").max(5000, "Text is too long")
+    text: z.string().min(10, "Text must be at least 10 characters long").max(5000, "Text is too long").optional()
+});
+
+// Configure Multer for memory storage
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf') {
+            cb(null, true);
+        } else {
+            cb(new Error('Only images and PDF files are allowed!'), false);
+        }
+    }
 });
 
 // Routes
-app.post('/api/analyze', async (req, res, next) => {
+app.post('/api/analyze', upload.single('file'), async (req, res, next) => {
     try {
-        const validation = analyzeSchema.safeParse(req.body);
+        let textInput = req.body.text || "";
+        let imageData = null;
 
-        if (!validation.success) {
-            const errorMessage = validation.error?.errors?.[0]?.message || "Invalid input data";
+        // 1. Handle File Uploads
+        if (req.file) {
+            logger.info(`Processing file: ${req.file.originalname} (${req.file.mimetype})`);
 
-            logger.warn(`Validation Error: ${errorMessage}`);
-            return res.status(400).json({ error: errorMessage });
+            if (req.file.mimetype === 'application/pdf') {
+                // PDF Parsing
+                try {
+                    const pdfData = await pdf(req.file.buffer);
+                    textInput += "\n\n[PDF CONTENT START]\n" + pdfData.text + "\n[PDF CONTENT END]";
+                } catch (err) {
+                    logger.error(`PDF Parsing Failed: ${err.message}`);
+                    throw new Error("Failed to parse PDF file.");
+                }
+            } else if (req.file.mimetype.startsWith('image/')) {
+                // Image Handling for Vision
+                imageData = {
+                    mimeType: req.file.mimetype,
+                    base64: req.file.buffer.toString('base64')
+                };
+            }
         }
 
-        const { text } = validation.data;
-        logger.info('Analyzing text...');
+        // 2. Validation
+        if (!textInput && !imageData) {
+            return res.status(400).json({ error: "Please provide text or upload a file." });
+        }
 
-        // Call the AI Service
-        const analysis = await llmService.analyzeText(text);
+        // 3. AI Analysis
+        logger.info('Sending content to AI...');
+        const analysis = await llmService.analyzeText(textInput, imageData);
 
         return res.json(analysis);
 
     } catch (error) {
-        next(error); // Pass to error handler
+        // Multer Errors
+        if (error instanceof multer.MulterError) {
+            return res.status(400).json({ error: `Upload error: ${error.message}` });
+        }
+        next(error); // Pass to global error handler
     }
 });
 
