@@ -31,8 +31,10 @@ export const llmService = {
         try {
             const genAI = new GoogleGenerativeAI(process.env.LLM_API_KEY);
             // Use gemini-1.5-flash for vision capabilities
-            // Use gemini-1.5-flash-latest for availability
-            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+            // Use gemini-flash-latest as it is the only one recognized by this key
+            const modelName = "gemini-flash-latest";
+            logger.info(`Using Gemini Model: ${modelName}`);
+            const model = genAI.getGenerativeModel({ model: modelName });
 
             const textPart = SYSTEM_PROMPT + `\n\nAnalyze this notice text:\n"${text}"`;
 
@@ -74,6 +76,20 @@ export const llmService = {
 
         } catch (error) {
             logger.error(`Gemini API/Pipeline Error: ${error.message}`);
+
+            if (error.message.includes("429") || error.message.toLowerCase().includes("quota")) {
+                return {
+                    type: "Service Busy",
+                    seriousness: "LOW",
+                    confidence: "HIGH",
+                    summary: "The AI service is currently experiencing high traffic (Quota Exceeded). Please try again in a minute.",
+                    action: "Wait and retry.",
+                    nextSteps: ["Retry later"],
+                    deadlines: "Unknown",
+                    redFlags: null
+                };
+            }
+
             // Global Kill Switch: Return safe fallback on ANY error
             return FALLBACK_RESPONSE;
         }
